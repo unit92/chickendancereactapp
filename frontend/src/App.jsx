@@ -4,7 +4,25 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import './App.css'
 
+/**
+ * Developer Guide
+ * ---------------
+ *
+ * Setup
+ *   1. `cd frontend && npm install` - install all dependencies.
+ *   2. `npm run dev` - launch the Vite development server.
+ *   3. `npm run lint` - run ESLint before committing changes.
+ *   4. `npm run build` - build the production bundle.
+ *
+ * Overview
+ *   - This component mounts a three.js scene that loads `public/Chicken.glb` and
+ *     plays its animation in a loop.
+ *   - The UI lets you drag preset camera angles into a playlist and play them
+ *     back sequentially. "Play Sound" starts a simple Web Audio melody.
+ */
+
 function App() {
+  // Refs keep track of three.js objects and audio nodes
   const mountRef = useRef(null)
   const cameraRef = useRef(null)
   const controlsRef = useRef(null)
@@ -13,10 +31,13 @@ function App() {
   const noteIntervalRef = useRef(null)
   const [audioOn, setAudioOn] = useState(false)
   const [playing, setPlaying] = useState(false)
+  // Playlist holds camera positions dragged in by the user
   const [playlist, setPlaylist] = useState(Array(20).fill(null))
   const [currentStep, setCurrentStep] = useState(0)
+  // Array of toast notifications to display in the UI
   const [toasts, setToasts] = useState([])
 
+  // Set up the three.js scene once on mount
   useEffect(() => {
     const mount = mountRef.current
     const width = mount.clientWidth
@@ -68,6 +89,7 @@ function App() {
     }
   }, [])
 
+  // Predefined camera locations referenced by the playlist
   const angles = {
     front: { x: 0, y: 1.5, z: 5 },
     back: { x: 0, y: 1.5, z: -5 },
@@ -77,6 +99,7 @@ function App() {
   }
 
 
+  // Start or stop the Web Audio oscillator that plays a short melody
   function toggleAudio() {
     if (audioOn) {
       clearInterval(noteIntervalRef.current)
@@ -109,6 +132,7 @@ function App() {
   }
 
 
+  // Smoothly move the camera to `pos` over `duration` milliseconds
   function tweenTo(pos, duration = 1000) {
     return new Promise((resolve) => {
       if (!cameraRef.current || !controlsRef.current) {
@@ -137,6 +161,7 @@ function App() {
     })
   }
 
+  // Show a short toast notification on screen
   function addToast(message) {
     const id = Date.now()
     setToasts((t) => [...t, { id, message }])
@@ -145,6 +170,7 @@ function App() {
     }, 2000)
   }
 
+  // Drop handler for placing a camera angle into the playlist
   function handleDrop(e, index) {
     e.preventDefault()
     const name = e.dataTransfer.getData('text/plain')
@@ -157,10 +183,12 @@ function App() {
     addToast(`${name} set in slot ${index + 1}`)
   }
 
+  // Start dragging a camera angle from the preset list
   function handleDragStart(e, name) {
     e.dataTransfer.setData('text/plain', name)
   }
 
+  // Tween the camera through each active playlist entry
   async function playPlaylist() {
     if (playing) return
     setPlaying(true)
