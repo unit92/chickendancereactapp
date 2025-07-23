@@ -13,6 +13,9 @@ function App() {
   const noteIntervalRef = useRef(null)
   const [audioOn, setAudioOn] = useState(false)
   const [playing, setPlaying] = useState(false)
+  const [playlist, setPlaylist] = useState(Array(20).fill(null))
+  const [currentStep, setCurrentStep] = useState(0)
+  const [toasts, setToasts] = useState([])
 
   useEffect(() => {
     const mount = mountRef.current
@@ -65,7 +68,7 @@ function App() {
     }
   }, [])
 
-  const presets = {
+  const angles = {
     front: { x: 0, y: 1.5, z: 5 },
     back: { x: 0, y: 1.5, z: -5 },
     left: { x: 5, y: 1.5, z: 0 },
@@ -73,14 +76,6 @@ function App() {
     top: { x: 0, y: 5, z: 0 },
   }
 
-  const playlist = [
-    presets.front,
-    presets.left,
-    presets.back,
-    presets.right,
-    presets.top,
-    presets.front,
-  ]
 
   function toggleAudio() {
     if (audioOn) {
@@ -113,11 +108,6 @@ function App() {
     setAudioOn(true)
   }
 
-  function setPreset(pos) {
-    if (!cameraRef.current || !controlsRef.current) return
-    cameraRef.current.position.set(pos.x, pos.y, pos.z)
-    controlsRef.current.update()
-  }
 
   function tweenTo(pos, duration = 1000) {
     return new Promise((resolve) => {
@@ -147,43 +137,110 @@ function App() {
     })
   }
 
+  function addToast(message) {
+    const id = Date.now()
+    setToasts((t) => [...t, { id, message }])
+    setTimeout(() => {
+      setToasts((t) => t.filter((toast) => toast.id !== id))
+    }, 2000)
+  }
+
+  function handleDrop(e, index) {
+    e.preventDefault()
+    const name = e.dataTransfer.getData('text/plain')
+    if (!angles[name]) return
+    setPlaylist((pl) => {
+      const np = [...pl]
+      np[index] = { name, pos: angles[name] }
+      return np
+    })
+    addToast(`${name} set in slot ${index + 1}`)
+  }
+
+  function handleDragStart(e, name) {
+    e.dataTransfer.setData('text/plain', name)
+  }
+
   async function playPlaylist() {
     if (playing) return
     setPlaying(true)
-    for (const pos of playlist) {
+    const active = playlist.filter(Boolean)
+    setCurrentStep(0)
+    for (let i = 0; i < active.length; i++) {
+      const { pos, name } = active[i]
+      addToast(`Moving to ${name}`)
+      setCurrentStep(i)
       await tweenTo(pos, 2000)
     }
+    setCurrentStep(active.length)
     setPlaying(false)
   }
 
+  const totalSteps = playlist.filter(Boolean).length
+
   return (
-    <div className="w-full h-full relative">
-      <div className="absolute inset-0" ref={mountRef}></div>
-      <div className="absolute bottom-4 left-0 right-0 flex flex-col items-center space-y-2 z-10">
-        <button
-          onClick={toggleAudio}
-          className="px-3 py-1 text-sm bg-white bg-opacity-80 rounded shadow hover:bg-opacity-100"
-        >
-          {audioOn ? 'Stop Sound' : 'Play Sound'}
-        </button>
-        <button
-          onClick={playPlaylist}
-          disabled={playing}
-          className="px-3 py-1 text-sm bg-white bg-opacity-80 rounded shadow hover:bg-opacity-100 disabled:opacity-50"
-        >
-          {playing ? 'Playing...' : 'Play Camera Playlist'}
-        </button>
-        <div className="flex space-x-2">
-          {Object.entries(presets).map(([name, pos]) => (
-            <button
+    <div className="flex h-full relative">
+      <div className="w-64 p-2 bg-white bg-opacity-70 overflow-y-auto space-y-2">
+        <h2 className="font-bold">Camera Angles</h2>
+        <div className="space-y-1">
+          {Object.keys(angles).map((name) => (
+            <div
               key={name}
-              onClick={() => setPreset(pos)}
-              className="px-3 py-1 text-sm capitalize bg-white bg-opacity-80 rounded shadow hover:bg-opacity-100"
+              draggable
+              onDragStart={(e) => handleDragStart(e, name)}
+              className="p-1 bg-gray-200 rounded text-center cursor-move capitalize"
             >
               {name}
-            </button>
+            </div>
           ))}
         </div>
+        <h2 className="font-bold mt-4">Playlist</h2>
+        <div className="space-y-1">
+          {playlist.map((item, idx) => (
+            <div
+              key={idx}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, idx)}
+              className="h-8 border border-dashed rounded flex items-center justify-center bg-white bg-opacity-60 text-xs capitalize"
+            >
+              {item ? item.name : `Slot ${idx + 1}`}
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 h-2 bg-gray-300 rounded overflow-hidden">
+          <div
+            className="h-full bg-blue-500"
+            style={{ width: `${totalSteps ? (currentStep / totalSteps) * 100 : 0}%` }}
+          ></div>
+        </div>
+      </div>
+      <div className="flex-1 relative">
+        <div className="absolute inset-0" ref={mountRef}></div>
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-10">
+          <button
+            onClick={toggleAudio}
+            className="px-3 py-1 text-sm bg-white bg-opacity-80 rounded shadow hover:bg-opacity-100"
+          >
+            {audioOn ? 'Stop Sound' : 'Play Sound'}
+          </button>
+          <button
+            onClick={playPlaylist}
+            disabled={playing}
+            className="px-3 py-1 text-sm bg-white bg-opacity-80 rounded shadow hover:bg-opacity-100 disabled:opacity-50"
+          >
+            {playing ? 'Playing...' : 'Play Camera Playlist'}
+          </button>
+        </div>
+      </div>
+      <div className="absolute top-4 right-4 space-y-2 z-20">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className="px-2 py-1 bg-black bg-opacity-80 text-white text-sm rounded"
+          >
+            {t.message}
+          </div>
+        ))}
       </div>
     </div>
   )
